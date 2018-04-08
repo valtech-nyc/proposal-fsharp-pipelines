@@ -1,4 +1,6 @@
-# ESNext Proposal: The Pipeline Operator
+# ESNext Proposal: F# Pipeline Operator
+
+## Introduction
 
 This proposal introduces a new operator `|>` similar to
   [F#](https://en.wikibooks.org/wiki/F_Sharp_Programming/Higher_Order_Functions#The_.7C.3E_Operator),
@@ -8,48 +10,71 @@ This proposal introduces a new operator `|>` similar to
   [Julia](http://docs.julialang.org/en/release-0.4/stdlib/base/?highlight=|%3E#Base.|%3E),
   [Hack](https://docs.hhvm.com/hack/operators/pipe-operator),
   and [LiveScript](http://livescript.net/#piping),
-  as well as UNIX pipes. It's a backwards-compatible way of streamlining chained function calls in a readable, functional manner, and provides a practical alternative to extending built-in prototypes.
+  as well as UNIX pipes. It's a backwards-compatible way of streamlining chained function calls in a functional manner, and provides a practical alternative to extending object prototypes for methods.
 
-***
+### The Problem
 
-**⚠ Warning**: The details of the pipeline syntax are **currently unsettled**. There are [**two competing proposals**](https://github.com/tc39/proposal-pipeline-operator/wiki) under consideration. This readme is a minimal proposal, which covers the basic features of the pipeline operator. It functions as a strawman for comparing the tradeoffs of the competing proposals.
-
-Those proposals are as follows:
-
-* [**F# Pipelines**](https://github.com/tc39/proposal-pipeline-operator/wiki#proposal-1-f-sharp-style-only)
-* **Smart Pipelines**: [**Explainer**](https://github.com/js-choi/proposal-smart-pipelines/blob/master/readme.md) + [**Specification**](https://jschoi.org/18/es-smart-pipelines/spec)
-
-[Formal specifications and Babel plugins](https://github.com/tc39/proposal-pipeline-operator/issues/89#issuecomment-363853394) for are already underway to gather feedback.
-
-See also the [**latest presentation to TC39**](https://docs.google.com/presentation/d/1eFFRK1wLIazIuK0F6fY974OIDvvWXS890XAMB59PUBA/edit#slide=id.p) as well as [**recent GitHub issues**](https://github.com/tc39/proposal-pipeline-operator/issues?utf8=✓&q=is%3Aissue+sort%3Aupdated-desc+) for more information.
-
-***
-
-## Introduction
-
-The pipeline operator is essentially a useful syntactic sugar on a function call with a single argument. In other words, `sqrt(64)` is equivalent to `64 |> sqrt`.
-
-This allows for greater readability when chaining several functions together. For example, given the following functions:
+At its worst, a series of data transformations can become a deeply-nested and hard-to-read mess of non-linear data flow. Take a look at the following example:
 
 ```js
-function doubleSay (str) {
-  return str + ", " + str;
-}
-function capitalize (str) {
-  return str[0].toUpperCase() + str.substring(1);
-}
-function exclaim (str) {
-  return str + '!';
-}
+console.log(
+  await stream.write(
+    new User.Message(
+      capitalize(
+        doubledSay(
+          await promise || throw new TypeError(`Invalid value from ${promise}`),
+          ', '
+        )
+      ) + '!'
+    )
+  )
+);
+```
+
+Notice how your eyes have to move back and forth, up and down, in order to follow the flow through the code. The inclusion of `await` increases the complexity, as now you have to consider both then data flow as well the impact on the event loop.
+
+This may appear to be a contrived example, but application code often does this kind of data manipulation. In the real world, you might break this out onto separate lines, leading to overly verbose code and unnecessary intermediate variables.
+
+### The Solution
+
+The pipeline operator simplifies the process of chaining several functions together. We can flatten the above invocation to this:
+
+```js
+promise
+  |> await
+  |> (x => x || throw new TypeError(`Invalid value from ${promise}`))
+  |> (x => doubleSay(x, ', '))
+  |> capitalize
+  |> (x => x + '!')
+  |> (x => new User.Message(x))
+  |> (x => stream.write(x))
+  |> await
+  |> console.log;
+```
+
+Now the flow reads top to bottom, left to right, without requiring your eyes to jump around the code to follow it. The points at which async control flow comes into play is clear. Steps can be easily added or removed from the flow, or collapsed into each other, without requiring the addition or removal of lots of parentheses or indentation, enabling git diffs to be clearer as well.
+
+## Overview
+
+The pipeline operator provides syntactic sugar over a function call with a single argument. In other words, `64 |> sqrt` would desugar to `sqrt(64)`. This application can be chained, producing a clear sequence of operations to perform on an input.
+
+## Basic Example
+
+Given the following functions:
+
+```js
+const doubleSay = str => str + ", " + str;
+const capitalize = str => str[0].toUpperCase() + str.substring(1);
+const exclaim = str => str + '!';
 ```
 
 ...the following invocations are equivalent:
 
 ```js
-let result = exclaim(capitalize(doubleSay("hello")));
+const result = exclaim(capitalize(doubleSay("hello")));
 result //=> "Hello, hello!"
 
-let result = "hello"
+const result = "hello"
   |> doubleSay
   |> capitalize
   |> exclaim;
@@ -57,57 +82,123 @@ let result = "hello"
 result //=> "Hello, hello!"
 ```
 
-### Functions with Multiple Arguments
+## Use with N-ary Functions
 
-The pipeline operator does not need any special rules for functions with multiple arguments; JavaScript already has ways to handle such cases.
+The pipeline operator does not need any special rules for functions with multiple arguments; JavaScript can already handle such cases. This keeps the syntactic overhead of the new operator to a minimum while enabling other future syntax to complement it.
 
 For example, given the following functions:
 
 ```js
-function double (x) { return x + x; }
-function add (x, y) { return x + y; }
+const double = x => x + x;
+const add = (x, y) => x + y;
 
-function boundScore (min, max, score) {
-  return Math.max(min, Math.min(max, score));
-}
+const boundScore = (min, max, score) =>
+  Math.max(min, Math.min(max, score));
 ```
 
-...you can use an arrow function to handle multi-argument functions (such as `add`):
+...you can use an arrow function to handle multi-argument functions:
 
 ```js
-let person = { score: 25 };
+const person = { score: 25 };
 
-let newScore = person.score
+const newScore = person.score
   |> double
-  |> (_ => add(7, _))
-  |> (_ => boundScore(0, 100, _));
+  |> (n => add(7, n))
+  |> (n => boundScore(0, 100, n));
 
 newScore //=> 57
 
-// As opposed to: let newScore = boundScore( 0, 100, add(7, double(person.score)) )
+// As opposed to:
+let newScore = boundScore(0, 100, add(7, double(person.score)));
 ```
 
-*Note: The use of underscore `_` is not required; it's just an arrow function, so you can use any parameter name you like.*
+As you can see, because the pipeline operator always pipes a single result value, it plays very nicely with the single-argument arrow function syntax. Because the pipeline operator's semantics are pure and simple, JavaScript engines can optimize away the arrow function, as the [Babel plugin](babel) currently does.
 
-As you can see, because the pipe operator always pipes a single result value, it plays very nicely with the single-argument arrow function syntax. Also, because the pipe operator's semantics are pure and simple, it could be possible for JavaScript engines to optimize away the arrow function.
+## Use with Methods
 
-### Use of `await`
-
-The current minimal proposal makes `|> await f` an early error, so there is no support currently for `await` in the pipeline. Each proposal has a different solution to `await` in a pipeline, so support is planned. Please see the respective proposals for their solutions.
-
-### Usage with `?` partial application syntax
-
-If the [partial application proposal](https://github.com/rbuckton/proposal-partial-application) (currently a [stage 1 proposal](https://github.com/rbuckton/proposal-partial-application)) gets accepted, the pipeline operator would be even easier to use. We would then be able to rewrite the previous example like so:
+When a pipeline is applied to method, the receiver of the method is bound to its current value. That is:
 
 ```js
-let person = { score: 25 };
+x |> a.f;
+```
 
-let newScore = person.score
-  |> double
-  |> add(7, ?)
-  |> boundScore(0, 100, ?);
+...will desugar as:
 
-newScore //=> 57
+```js
+a.f(x);
+```
+
+...ensuring the method `f` is called with the correct `this` (`a`).
+
+## Use with `await`
+
+The pipeline operator treats `await` similar to a unary function. `await` can appear in the pipeline like so:
+
+```js
+const result = promise |> await;
+```
+
+which desugars to:
+
+```js
+const result = await promise;
+```
+
+This enables awaiting the previous value in the pipeline. That means the following:
+
+```js
+const user = url
+  |> api.get
+  |> await
+  |> (r => r.json())
+  |> await
+  |> (j => j.data.user);
+```
+
+desugars roughly as follows:
+
+```js
+const _temp1 = api.get(url);
+const _temp2 = await _temp1;
+const _temp3 = _temp2.json();
+const _temp4 = await _temp3;
+const user = _temp4.data.json;
+```
+
+Attempting to pipe to `x |> await f` is a Syntax Error. Parentheses would be required (`x |> (await f)`) or it needs to be piped through `f` (`x |> f |> await`), depending on your intention.
+
+### Interaction with ASI
+
+Semicolons are inserted after `await` and a new line in a pipeline. Otherwise, the following would be a Syntax Error:
+
+```js
+const user = url
+  |> api.get
+  |> await
+  |> (r => r.json())
+  |> await
+user.id
+```
+
+Instead, it would parse as:
+
+```js
+const user = url
+  |> api.get
+  |> await
+  |> (r => r.json())
+  |> await;
+user.id
+```
+
+...and ultimately desugar to:
+
+```js
+const _temp1 = apit.get(url);
+const _temp2 = await _temp1;
+const _temp3 = _temp2.json();
+const user = await _temp3;
+user.id;
 ```
 
 ## Motivating Examples
@@ -119,34 +210,30 @@ Mixins via `Object.assign` are great, but sometimes you need something more adva
 Decorator functions are useful when you want to share behavior across multiple kinds of objects. For example, given the following decorators:
 
 ```js
-function greets (person) {
+const greets = person => {
   person.greet = () => `${person.name} says hi!`;
   return person;
-}
-function ages (age) {
-  return function (person) {
-    person.age = age;
-    person.birthday = function () { person.age += 1; };
-    return person;
-  }
-}
-function programs (favLang) {
-  return function (person) {
-    person.favLang = favLang;
-    person.program = () => `${person.name} starts to write ${person.favLang}!`;
-    return person;
-  }
-}
+};
+const ages = age => person => {
+  person.age = age;
+  person.birthday = function () { person.age += 1; };
+  return person;
+};
+const programs = favLang => person => {
+  person.favLang = favLang;
+  person.program = () => `${person.name} starts to write ${person.favLang}!`;
+  return person;
+};
 ```
 
 ...you can create multiple "classes" that share one or more behaviors:
 
 ```js
 function Person (name, age) {
-  return { name: name } |> greets |> ages(age);
+  return { name } |> greets |> ages(age);
 }
 function Programmer (name, age) {
-  return { name: name }
+  return { name }
     |> greets
     |> ages(age)
     |> programs('javascript');
@@ -158,46 +245,64 @@ function Programmer (name, age) {
 Validation is a great use case for pipelining functions. For example, given the following validators:
 
 ```js
-function bounded (prop, min, max) {
-  return function (obj) {
-    if ( obj[prop] < min || obj[prop] > max ) throw Error('out of bounds');
-    return obj;
-  };
-}
-function format (prop, regex) {
-  return function (obj) {
-    if ( ! regex.test(obj[prop]) ) throw Error('invalid format');
-    return obj;
-  };
-}
+const bounded = (prop, min, max) => obj => {
+  if (obj[prop] < min || obj[prop] > max) throw Error('out of bounds');
+  return obj;
+};
+const format = (prop, regex) => obj => {
+  if (!regex.test(obj[prop])) throw Error('invalid format');
+  return obj;
+};
 ```
 
 ...we can use the pipeline operator to validate objects quite pleasantly:
 
 ```js
-function createPerson (attrs) {
+const createPerson = attrs =>
   attrs
     |> bounded('age', 1, 100)
     |> format('name', /^[a-z]$/i)
     |> Person.insertIntoDatabase;
-}
 ```
 
 ### Usage with Prototypes
 
-Although the pipe operator operates well with functions that don't use `this`, it can still integrate nicely into current workflows:
+Although the pipeline operator operates well with functions that don't use `this`, it can still integrate nicely into current workflows:
 
 ```js
 import Lazy from 'lazy.js'
 
 getAllPlayers()
-  .filter( p => p.score > 100 )
+  .filter(p => p.score > 100)
   .sort()
-|> (_ => Lazy(_)
-  .map( p => p.name )
-  .take(5))
-|> (_ => renderLeaderboard('#my-div', _));
+  |> (_ => Lazy(_)
+      .map(p => p.name)
+      .take(5))
+  |> (_ => renderLeaderboard('#my-div', _));
 ```
+
+Arrow functions are able to easily handle this use case.
+
+### Importable Methods
+
+In the above example, `lazy.js` could update its API to use Importable Methods instead of attaching them to the prototype. This allows the importing application to only include the methods they actually use and tree-shake the code the don't use.
+
+Developers can use it in essentially the same way they do now with a fluent interface, except they use `|>` instead of `.`:
+
+```js
+import Lazy, { map, take } from 'lazy.js';
+import { filter, sort } from './array-utils';
+
+getAllPlayers()
+    |> filter(p => p.score > 100)
+    |> sort()
+  |> Lazy
+    |> map(p => p.name)
+    |> take(5)
+  |> (_ => renderLeaderboard('#my-div', _));
+```
+
+Now, `lazy.js` can have all its unused methods pruned from the final application bundle.
 
 ### Mixins
 
@@ -228,27 +333,62 @@ class Comment extends Model |> Editable |> Sharable {
 }
 ```
 
-### Real-world Use Cases
+## Relationship to Other Proposals
 
-Check out the [Example Use Cases](https://github.com/mindeavor/es-pipeline-operator/wiki/Example-Use-Cases) wiki page to see more possibilities.
+The F# Pipeline is intended to solve a small, specific problem. Other proposals can be used with pipeline to greater effect than any of them individually.
 
-## Implementations
+### Impact on Lifted Pipeline Operator
 
-### Browser
+The [lifted pipeline operator](https://github.com/isiahmeadows/lifted-pipeline-strawman) would not be blocked or adversely impacted. None of the its syntax is used by the F# pipeline. The examples in the current README would need parentheses:
 
-* Firefox 58+ has pipeline support behind the `--enable-pipeline-operator` compile flag
+```js
+const toSlug = string =>
+  string
+    |> (_ => _.split(" "))
+    :> (word => word.toLowerCase())
+    |> (_ => _.join("-"))
+    |> encodeURIComponent;
+```
 
-### Build Tools
+This would enable pipelines to dispatch based on type, using a well-known Symbol, `Symbol.lift`. Check out [the proposal](https://github.com/isiahmeadows/lifted-pipeline-strawman) for more information.
 
-[@babel/plugin-proposal-pipeline-operator](https://github.com/babel/babel/tree/master/packages/babel-plugin-proposal-pipeline-operator)
+### Usage with `?` partial application syntax
 
-## Related proposals
+If the [partial application proposal](https://github.com/tc39/proposal-partial-application) (currently a stage 1 proposal) gets accepted, the pipeline operator would be even easier to use. We would then be able to rewrite the previous example like so:
 
-If you like this proposal, you will certainly like the [proposal for easier partial application](https://github.com/rbuckton/proposal-partial-application). Take a look and star if you like it!
+```js
+const person = { score: 25 };
 
-You may also be interested in these separate proposals for a function composition operator:
+const newScore = person.score
+  |> double
+  |> add(7, ?)
+  |> boundScore(0, 100, ?);
+```
 
-- Operator: [TheNavigateur/proposal-pipeline-operator-for-function-composition](https://github.com/TheNavigateur/proposal-pipeline-operator-for-function-composition)
-- Operator (generalized): [isiahmeadows/lifted-pipeline-strawman](https://github.com/isiahmeadows/lifted-pipeline-strawman)
-- Method: [simonstaton/Function.prototype.compose-TC39-Proposal](https://github.com/simonstaton/Function.prototype.compose-TC39-Proposal)
-- Function: [fantasyland/ECMAScript-proposals (issue #1 comment)](https://github.com/fantasyland/ECMAScript-proposals/issues/1#issuecomment-306243513)
+Arrow functions currently provide this capability with more syntax. If it was included, code using arrow functions would be simplified to use partial application, improving the overall syntax of the pipeline.
+
+#### Usage with `this` bound partial application
+
+If partial application adopts the [`?this` placeholder](https://github.com/tc39/proposal-partial-application/issues/23), then the usage with prototypes example can be simplified thus:
+
+```js
+import Lazy from 'lazy.js'
+
+getAllPlayers()
+  .filter(p => p.score > 100)
+  .sort()
+  |> Lazy
+  |> ?this.map(p => p.name)
+  |> ?this.take(5)
+  |> (_ => renderLeaderboard('#my-div', _));
+```
+
+While this was previously wrapped in an arrow function, its inclusion turns the entire chain into a flat pipeline.
+
+## Real-world Use Cases
+
+Check out the [Example Use Cases](https://github.com/tc39/proposal-pipeline-operator/wiki/Example-Use-Cases) wiki page to see more possibilities.
+
+## Implementation
+
+Check out [@babel/plugin-proposal-pipeline-operator](https://github.com/babel/babel/tree/master/packages/babel-plugin-proposal-pipeline-operator).
