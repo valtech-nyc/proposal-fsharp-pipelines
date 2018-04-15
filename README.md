@@ -114,6 +114,16 @@ let newScore = boundScore(0, 100, add(7, double(person.score)));
 
 As you can see, because the pipeline operator always pipes a single result value, it plays very nicely with the single-argument arrow function syntax. Because the pipeline operator's semantics are pure and simple, JavaScript engines can optimize away the arrow function, as the [Babel plugin](babel) currently does.
 
+### Arrow Functions & Parentheses
+
+Note that every arrow function needs to be wrapped in parentheses. The full discussion can be found [here](https://github.com/tc39/proposal-pipeline-operator/pull/70) and [here](https://github.com/tc39/proposal-pipeline-operator/issues/104), but the short version is that this:
+
+```js
+x |> a => b |> a
+```
+
+...is ambiguous, and neither of the potential solutions are necessarily intuitive. Requiring parentheses ensures the way it's intended to be parsed is clear.
+
 ## Use with Methods
 
 When a pipeline is applied to method, the receiver of the method is bound to its current value. That is:
