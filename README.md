@@ -42,11 +42,11 @@ The pipeline operator simplifies the process of chaining several functions toget
 ```js
 promise
   |> await
-  |> (x => doubleSay(x, ', '))
+  |> x => doubleSay(x, ', ')
   |> capitalize
-  |> (x => x + '!')
-  |> (x => new User.Message(x))
-  |> (x => stream.write(x))
+  |> x => x + '!'
+  |> x => new User.Message(x)
+  |> x => stream.write(x)
   |> await
   |> console.log;
 ```
@@ -73,10 +73,10 @@ const exclaim = str => str + '!';
 const result = exclaim(capitalize(doubleSay("hello")));
 result //=> "Hello, hello!"
 
-const result = "hello"
+const result = ("hello"
   |> doubleSay
   |> capitalize
-  |> exclaim;
+  |> exclaim);
 
 result //=> "Hello, hello!"
 ```
@@ -100,10 +100,10 @@ const boundScore = (min, max, score) =>
 ```js
 const person = { score: 25 };
 
-const newScore = person.score
+const newScore = (person.score
   |> double
-  |> (n => add(7, n))
-  |> (n => boundScore(0, 100, n));
+  |> n => add(7, n)
+  |> n => boundScore(0, 100, n));
 
 newScore //=> 57
 
@@ -113,15 +113,39 @@ let newScore = boundScore(0, 100, add(7, double(person.score)));
 
 As you can see, because the pipeline operator always pipes a single result value, it plays very nicely with the single-argument arrow function syntax. Because the pipeline operator's semantics are pure and simple, JavaScript engines can optimize away the arrow function, as the [Babel plugin](babel) currently does.
 
-### Arrow Functions & Parentheses
+### Impact on Precedence
 
-Note that every arrow function needs to be wrapped in parentheses. The full discussion can be found [here](https://github.com/tc39/proposal-pipeline-operator/pull/70) and [here](https://github.com/tc39/proposal-pipeline-operator/issues/104), but the short version is that this:
+Arrow functions do not require parentheses. The shorthand way of understanding how this works is that the pipeline operator effectively terminates the body of an arrow function. This means that this:
 
 ```js
-x |> a => b |> a
+const a = x => x |> a |> b
 ```
 
-...is ambiguous, and neither of the potential solutions are necessarily intuitive. Requiring parentheses ensures the way it's intended to be parsed is clear.
+...will parse as:
+
+```js
+const a = (x => x) |> a |> b
+```
+
+...with the short arrow function passed in as the LHS of the first operator.
+
+Enabling this behavior has impacts on other usages of the pipeline. Piping a series of functions in an arrow function would require the body to be wrapped in parentheses:
+
+```js
+const format = x => (x
+  |> doubleSay
+  |> capitalize
+  |> exclaim);
+```
+
+Additionally, assignment needs to be wrapped in parentheses as well:
+
+```js
+const result = ("hello"
+  |> doubleSay
+  |> capitalize
+  |> exclaim);
+```
 
 ## Use with Methods
 
@@ -156,12 +180,12 @@ const result = await promise;
 This enables awaiting the previous value in the pipeline. That means the following:
 
 ```js
-const user = url
+const user = (url
   |> api.get
   |> await
-  |> (r => r.json())
+  |> r => r.json()
   |> await
-  |> (j => j.data.user);
+  |> j => j.data.user);
 ```
 
 desugars roughly as follows:
@@ -175,40 +199,6 @@ const user = _temp4.data.json;
 ```
 
 Attempting to pipe to `x |> await f` is a Syntax Error. Parentheses would be required (`x |> (await f)`) or it needs to be piped through `f` (`x |> f |> await`), depending on your intention.
-
-### Interaction with ASI
-
-Semicolons are inserted after `await` and a new line in a pipeline. Otherwise, the following would be a Syntax Error:
-
-```js
-const user = url
-  |> api.get
-  |> await
-  |> (r => r.json())
-  |> await
-user.id
-```
-
-Instead, it would parse as:
-
-```js
-const user = url
-  |> api.get
-  |> await
-  |> (r => r.json())
-  |> await;
-user.id
-```
-
-...and ultimately desugar to:
-
-```js
-const _temp1 = apit.get(url);
-const _temp2 = await _temp1;
-const _temp3 = _temp2.json();
-const user = await _temp3;
-user.id;
-```
 
 ## Motivating Examples
 
@@ -225,7 +215,7 @@ const greets = person => {
 };
 const ages = age => person => {
   person.age = age;
-  person.birthday = function () { person.age += 1; };
+  person.birthday = () => { person.age += 1; };
   return person;
 };
 const programs = favLang => person => {
@@ -267,11 +257,12 @@ const format = (prop, regex) => obj => {
 ...we can use the pipeline operator to validate objects quite pleasantly:
 
 ```js
-const createPerson = attrs =>
+const createPerson = attrs => (
   attrs
     |> bounded('age', 1, 100)
     |> format('name', /^[a-z]$/i)
-    |> Person.insertIntoDatabase;
+    |> Person.insertIntoDatabase
+);
 ```
 
 ### Usage with Prototypes
@@ -284,10 +275,10 @@ import Lazy from 'lazy.js'
 getAllPlayers()
   .filter(p => p.score > 100)
   .sort()
-  |> (_ => Lazy(_)
+  |> _ => Lazy(_)
       .map(p => p.name)
-      .take(5))
-  |> (_ => renderLeaderboard('#my-div', _));
+      .take(5)
+  |> _ => renderLeaderboard('#my-div', _);
 ```
 
 Arrow functions are able to easily handle this use case.
@@ -308,7 +299,7 @@ getAllPlayers()
   |> Lazy
     |> map(p => p.name)
     |> take(5)
-  |> (_ => renderLeaderboard('#my-div', _));
+  |> _ => renderLeaderboard('#my-div', _);
 ```
 
 Now, `lazy.js` can have all its unused methods pruned from the final application bundle.

@@ -7,12 +7,13 @@ The F# Pipeline is intended to solve a small, specific problem. Other proposals 
 The [lifted pipeline operator](https://github.com/isiahmeadows/lifted-pipeline-strawman) would not be blocked or adversely impacted. None of the its syntax is used by the F# pipeline. The examples in the current README would need parentheses:
 
 ```js
-const toSlug = string =>
+const toSlug = string => (
   string
-    |> (_ => _.split(" "))
-    :> (word => word.toLowerCase())
-    |> (_ => _.join("-"))
-    |> encodeURIComponent;
+    |> _ => _.split(" ")
+    :> word => word.toLowerCase()
+    |> _ => _.join("-")
+    |> encodeURIComponent
+);
 ```
 
 This would enable pipelines to dispatch based on type, using a well-known Symbol, `Symbol.lift`. Check out [the proposal](https://github.com/isiahmeadows/lifted-pipeline-strawman) for more information.
@@ -45,7 +46,7 @@ getAllPlayers()
   |> Lazy
   |> ?this.map(p => p.name)
   |> ?this.take(5)
-  |> (_ => renderLeaderboard('#my-div', _));
+  |> _ => renderLeaderboard('#my-div', _);
 ```
 
 While this was previously wrapped in an arrow function, its inclusion turns the entire chain into a flat pipeline.
