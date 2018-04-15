@@ -22,7 +22,7 @@ console.log(
     new User.Message(
       capitalize(
         doubledSay(
-          await promise || throw new TypeError(`Invalid value from ${promise}`),
+          await promise,
           ', '
         )
       ) + '!'
@@ -42,7 +42,6 @@ The pipeline operator simplifies the process of chaining several functions toget
 ```js
 promise
   |> await
-  |> (x => x || throw new TypeError(`Invalid value from ${promise}`))
   |> (x => doubleSay(x, ', '))
   |> capitalize
   |> (x => x + '!')
