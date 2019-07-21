@@ -31,7 +31,7 @@ console.log(
 );
 ```
 
-Notice how your eyes have to move back and forth, up and down, in order to follow the flow through the code. The inclusion of `await` increases the complexity, as now you have to consider both then data flow as well the impact on the event loop.
+Notice how your eyes have to move back and forth, up and down, in order to follow the flow through the code. The inclusion of `await` increases the complexity, as now you have to consider both the data flow as well the impact on the event loop.
 
 This may appear to be a contrived example, but application code often does this kind of data manipulation. In the real world, you might break this out onto separate lines, leading to overly verbose code and unnecessary intermediate variables.
 
@@ -73,10 +73,10 @@ const exclaim = str => str + '!';
 const result = exclaim(capitalize(doubleSay("hello")));
 result //=> "Hello, hello!"
 
-const result = ("hello"
+const result = "hello"
   |> doubleSay
   |> capitalize
-  |> exclaim);
+  |> exclaim;
 
 result //=> "Hello, hello!"
 ```
@@ -100,10 +100,10 @@ const boundScore = (min, max, score) =>
 ```js
 const person = { score: 25 };
 
-const newScore = (person.score
+const newScore = person.score
   |> double
   |> n => add(7, n)
-  |> n => boundScore(0, 100, n));
+  |> n => boundScore(0, 100, n);
 
 newScore //=> 57
 
@@ -115,7 +115,7 @@ As you can see, because the pipeline operator always pipes a single result value
 
 ### Impact on Precedence
 
-Arrow functions do not require parentheses. The shorthand way of understanding how this works is that the pipeline operator effectively terminates the body of an arrow function. This means that this:
+Arrow functions do not require parentheses, allowing developers to use the pipeline operator to build up a composition chain. This means that this:
 
 ```js
 const a = x => x |> a |> b
@@ -124,28 +124,33 @@ const a = x => x |> a |> b
 ...will parse as:
 
 ```js
-const a = (x => x) |> a |> b
+const a = x => (x |> a |> b)
 ```
 
-...with the short arrow function passed in as the LHS of the first operator.
-
-Enabling this behavior has impacts on other usages of the pipeline. Piping a series of functions in an arrow function would require the body to be wrapped in parentheses:
+...with the body of the arrow function a single pipeline. Once inside a pipeline, arrow functions are terminated at the first operator, meaning this:
 
 ```js
-const format = x => (x
-  |> doubleSay
-  |> capitalize
-  |> exclaim);
+const updateScore = score =>
+  score
+    |> double
+    |> n => add(7, n)
+    |> n => boundScore(0, 100, n);
 ```
 
-Additionally, assignment needs to be wrapped in parentheses as well:
+...will parse as:
 
 ```js
-const result = ("hello"
-  |> doubleSay
-  |> capitalize
-  |> exclaim);
+const updateScore = score => (
+  score
+    |> double
+    |> (n => add(7, n))
+    |> (n => boundScore(0, 100, n));
+)
 ```
+
+...enabling an ergonomic means for function composition
+
+TODO: Add this behavior to the spec.
 
 ## Use with Methods
 
@@ -180,12 +185,12 @@ const result = await promise;
 This enables awaiting the previous value in the pipeline. That means the following:
 
 ```js
-const user = (url
+const user = url
   |> api.get
   |> await
   |> r => r.json()
   |> await
-  |> j => j.data.user);
+  |> j => j.data.user;
 ```
 
 desugars roughly as follows:
@@ -257,12 +262,11 @@ const format = (prop, regex) => obj => {
 ...we can use the pipeline operator to validate objects quite pleasantly:
 
 ```js
-const createPerson = attrs => (
+const createPerson = attrs =>
   attrs
     |> bounded('age', 1, 100)
     |> format('name', /^[a-z]$/i)
-    |> Person.insertIntoDatabase
-);
+    |> Person.insertIntoDatabase;
 ```
 
 ### Usage with Prototypes
@@ -276,8 +280,8 @@ getAllPlayers()
   .filter(p => p.score > 100)
   .sort()
   |> _ => Lazy(_)
-      .map(p => p.name)
-      .take(5)
+    .map(p => p.name)
+    .take(5)
   |> _ => renderLeaderboard('#my-div', _);
 ```
 
@@ -294,11 +298,11 @@ import Lazy, { map, take } from 'lazy.js';
 import { filter, sort } from './array-utils';
 
 getAllPlayers()
-    |> filter(p => p.score > 100)
-    |> sort()
+  |> filter(p => p.score > 100)
+  |> sort()
   |> Lazy
-    |> map(p => p.name)
-    |> take(5)
+  |> map(p => p.name)
+  |> take(5)
   |> _ => renderLeaderboard('#my-div', _);
 ```
 
