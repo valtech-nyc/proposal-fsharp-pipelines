@@ -4,14 +4,14 @@ The F# Pipeline is intended to solve a small, specific problem. Other proposals 
 
 ## Impact on Lifted Pipeline Operator
 
-The [lifted pipeline operator](https://github.com/isiahmeadows/lifted-pipeline-strawman) would not be blocked or adversely impacted. None of the its syntax is used by the F# pipeline. The examples in the current README would need parentheses:
+The [lifted pipeline operator](https://github.com/isiahmeadows/lifted-pipeline-strawman) would not be blocked or adversely impacted. None of the its syntax is used by the F# pipeline. The examples in the current README work fine:
 
 ```js
 const toSlug = string =>
   string
-    |> (_ => _.split(" "))
-    :> (word => word.toLowerCase())
-    |> (_ => _.join("-"))
+    |> _ => _.split(" ")
+    :> word => word.toLowerCase()
+    |> _ => _.join("-")
     |> encodeURIComponent;
 ```
 
@@ -30,7 +30,7 @@ const newScore = person.score
   |> boundScore(0, 100, ?);
 ```
 
-Arrow functions currently provide this capability with more syntax. If it was included, code using arrow functions would be simplified to use partial application, improving the overall syntax of the pipeline.
+Arrow functions currently provide this capability with more syntax. If it was included, code using arrow functions could be simplified to use partial application, improving the overall syntax of the pipeline.
 
 ### Usage with `this` bound partial application
 
@@ -45,7 +45,7 @@ getAllPlayers()
   |> Lazy
   |> ?this.map(p => p.name)
   |> ?this.take(5)
-  |> (_ => renderLeaderboard('#my-div', _));
+  |> renderLeaderboard('#my-div', ?);
 ```
 
 While this was previously wrapped in an arrow function, its inclusion turns the entire chain into a flat pipeline.

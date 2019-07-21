@@ -31,7 +31,7 @@ console.log(
 );
 ```
 
-Notice how your eyes have to move back and forth, up and down, in order to follow the flow through the code. The inclusion of `await` increases the complexity, as now you have to consider both then data flow as well the impact on the event loop.
+Notice how your eyes have to move back and forth, up and down, in order to follow the flow through the code. The inclusion of `await` increases the complexity, as now you have to consider both the data flow as well the impact on the event loop.
 
 This may appear to be a contrived example, but application code often does this kind of data manipulation. In the real world, you might break this out onto separate lines, leading to overly verbose code and unnecessary intermediate variables.
 
@@ -42,11 +42,11 @@ The pipeline operator simplifies the process of chaining several functions toget
 ```js
 promise
   |> await
-  |> (x => doubleSay(x, ', '))
+  |> x => doubleSay(x, ', ')
   |> capitalize
-  |> (x => x + '!')
-  |> (x => new User.Message(x))
-  |> (x => stream.write(x))
+  |> x => x + '!'
+  |> x => new User.Message(x)
+  |> x => stream.write(x)
   |> await
   |> console.log;
 ```
@@ -102,8 +102,8 @@ const person = { score: 25 };
 
 const newScore = person.score
   |> double
-  |> (n => add(7, n))
-  |> (n => boundScore(0, 100, n));
+  |> n => add(7, n)
+  |> n => boundScore(0, 100, n);
 
 newScore //=> 57
 
@@ -113,15 +113,44 @@ let newScore = boundScore(0, 100, add(7, double(person.score)));
 
 As you can see, because the pipeline operator always pipes a single result value, it plays very nicely with the single-argument arrow function syntax. Because the pipeline operator's semantics are pure and simple, JavaScript engines can optimize away the arrow function, as the [Babel plugin](babel) currently does.
 
-### Arrow Functions & Parentheses
+### Impact on Precedence
 
-Note that every arrow function needs to be wrapped in parentheses. The full discussion can be found [here](https://github.com/tc39/proposal-pipeline-operator/pull/70) and [here](https://github.com/tc39/proposal-pipeline-operator/issues/104), but the short version is that this:
+Arrow functions do not require parentheses, allowing developers to use the pipeline operator to build up a composition chain. This means that this:
 
 ```js
-x |> a => b |> a
+const a = x => x |> a |> b
 ```
 
-...is ambiguous, and neither of the potential solutions are necessarily intuitive. Requiring parentheses ensures the way it's intended to be parsed is clear.
+...will parse as:
+
+```js
+const a = x => (x |> a |> b)
+```
+
+...with the body of the arrow function a single pipeline. Once inside a pipeline, arrow functions are terminated at the first operator, meaning this:
+
+```js
+const updateScore = score =>
+  score
+    |> double
+    |> n => add(7, n)
+    |> n => boundScore(0, 100, n);
+```
+
+...will parse as:
+
+```js
+const updateScore = score => (
+  score
+    |> double
+    |> (n => add(7, n))
+    |> (n => boundScore(0, 100, n));
+)
+```
+
+...enabling an ergonomic means for function composition
+
+TODO: Add this behavior to the spec.
 
 ## Use with Methods
 
@@ -159,9 +188,9 @@ This enables awaiting the previous value in the pipeline. That means the followi
 const user = url
   |> api.get
   |> await
-  |> (r => r.json())
+  |> r => r.json()
   |> await
-  |> (j => j.data.user);
+  |> j => j.data.user;
 ```
 
 desugars roughly as follows:
@@ -175,40 +204,6 @@ const user = _temp4.data.json;
 ```
 
 Attempting to pipe to `x |> await f` is a Syntax Error. Parentheses would be required (`x |> (await f)`) or it needs to be piped through `f` (`x |> f |> await`), depending on your intention.
-
-### Interaction with ASI
-
-Semicolons are inserted after `await` and a new line in a pipeline. Otherwise, the following would be a Syntax Error:
-
-```js
-const user = url
-  |> api.get
-  |> await
-  |> (r => r.json())
-  |> await
-user.id
-```
-
-Instead, it would parse as:
-
-```js
-const user = url
-  |> api.get
-  |> await
-  |> (r => r.json())
-  |> await;
-user.id
-```
-
-...and ultimately desugar to:
-
-```js
-const _temp1 = apit.get(url);
-const _temp2 = await _temp1;
-const _temp3 = _temp2.json();
-const user = await _temp3;
-user.id;
-```
 
 ## Motivating Examples
 
@@ -225,7 +220,7 @@ const greets = person => {
 };
 const ages = age => person => {
   person.age = age;
-  person.birthday = function () { person.age += 1; };
+  person.birthday = () => { person.age += 1; };
   return person;
 };
 const programs = favLang => person => {
@@ -284,10 +279,10 @@ import Lazy from 'lazy.js'
 getAllPlayers()
   .filter(p => p.score > 100)
   .sort()
-  |> (_ => Lazy(_)
-      .map(p => p.name)
-      .take(5))
-  |> (_ => renderLeaderboard('#my-div', _));
+  |> _ => Lazy(_)
+    .map(p => p.name)
+    .take(5)
+  |> _ => renderLeaderboard('#my-div', _);
 ```
 
 Arrow functions are able to easily handle this use case.
@@ -303,12 +298,12 @@ import Lazy, { map, take } from 'lazy.js';
 import { filter, sort } from './array-utils';
 
 getAllPlayers()
-    |> filter(p => p.score > 100)
-    |> sort()
+  |> filter(p => p.score > 100)
+  |> sort()
   |> Lazy
-    |> map(p => p.name)
-    |> take(5)
-  |> (_ => renderLeaderboard('#my-div', _));
+  |> map(p => p.name)
+  |> take(5)
+  |> _ => renderLeaderboard('#my-div', _);
 ```
 
 Now, `lazy.js` can have all its unused methods pruned from the final application bundle.
