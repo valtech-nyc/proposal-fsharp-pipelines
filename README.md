@@ -118,13 +118,13 @@ As you can see, because the pipeline operator always pipes a single result value
 Arrow functions do not require parentheses, allowing developers to use the pipeline operator to build up a composition chain. This means that this:
 
 ```js
-const a = x => x |> a |> b
+const c = x => x |> a |> b
 ```
 
 ...will parse as:
 
 ```js
-const a = x => (x |> a |> b)
+const c = x => (x |> a |> b)
 ```
 
 ...with the body of the arrow function a single pipeline. Once inside a pipeline, arrow functions are terminated at the first operator, meaning this:
