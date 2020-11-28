@@ -21,7 +21,7 @@ console.log(
   await stream.write(
     new User.Message(
       capitalize(
-        doubledSay(
+        doubleSay(
           await promise,
           ', '
         )
